@@ -1,0 +1,11 @@
+gunicorn[aiohttp]
+aiohttp
+botbuilder-core
+botbuilder-schema
+openai
+python-dotenv
+azure-cognitiveservices-vision-computervision
+azure-cognitiveservices-speech
+msrest
+requests
+gunicorn
