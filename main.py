@@ -1,7 +1,5 @@
 import os
-import io
 import traceback
-import requests
 from aiohttp import web
 
 from botbuilder.core import (
@@ -12,49 +10,34 @@ from botbuilder.core import (
 from botbuilder.schema import Activity
 
 from openai import OpenAI
-
-from azure.cognitiveservices.vision.computervision import ComputerVisionClient
-from msrest.authentication import CognitiveServicesCredentials
-from azure.cognitiveservices.vision.computervision.models import VisualFeatureTypes
-
-import azure.cognitiveservices.speech as speechsdk
-
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # -----------------------------
 # ENV
 # -----------------------------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-VISION_ENDPOINT = os.getenv("VISION_ENDPOINT")
-VISION_KEY = os.getenv("VISION_KEY")
-SPEECH_KEY = os.getenv("SPEECH_KEY")
-SPEECH_REGION = os.getenv("SPEECH_REGION")
 
-# ⚠️ TEST MODE: disable auth for debugging
-APP_ID = ""
-APP_PASSWORD = ""
+# ⚠️ KEEP EMPTY ONLY FOR LOCAL DEBUG
+APP_ID = os.getenv("MicrosoftAppId", "")
+APP_PASSWORD = os.getenv("MicrosoftAppPassword", "")
 
 # -----------------------------
-# CLIENTS
+# CLIENT
 # -----------------------------
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-vision_client = ComputerVisionClient(
-    VISION_ENDPOINT,
-    CognitiveServicesCredentials(VISION_KEY)
-)
-
 # -----------------------------
-# BOT ADAPTER (DEBUG MODE)
+# ADAPTER
 # -----------------------------
 adapter_settings = BotFrameworkAdapterSettings(APP_ID, APP_PASSWORD)
 adapter = BotFrameworkAdapter(adapter_settings)
 
 async def on_error(context: TurnContext, error: Exception):
-    print("❌ ADAPTER ERROR:")
+    print("\n❌ ADAPTER ERROR:")
     traceback.print_exc()
-    await context.send_activity("⚠️ Bot error occurred")
+    await context.send_activity("⚠️ Bot encountered an error.")
 
 adapter.on_turn_error = on_error
 
@@ -66,7 +49,7 @@ def get_gpt_response(prompt):
         res = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a food assistant."},
+                {"role": "system", "content": "You are a food recommendation bot."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7
@@ -74,82 +57,72 @@ def get_gpt_response(prompt):
         return res.choices[0].message.content
     except Exception as e:
         print("GPT ERROR:", e)
-        return "GPT failed"
+        return "Failed to generate response."
 
 # -----------------------------
-# BOT LOGIC (DEBUG HEAVY)
+# BOT LOGIC
 # -----------------------------
 async def bot_logic(turn_context: TurnContext):
-    print("\n🔥 BOT_LOGIC TRIGGERED")
-    print("👉 Activity:", turn_context.activity.text)
-
     try:
         activity = turn_context.activity
+        user_text = activity.text or ""
 
-        reply = "default reply"
+        print("\n🔥 BOT TURN")
+        print("User:", user_text)
 
-        if activity.attachments:
-            print("📎 Attachment received")
-
+        if not user_text:
+            reply = "Send me a food request 😊"
         else:
-            user_text = activity.text
-            print("💬 User text:", user_text)
+            reply = get_gpt_response(f"Suggest 3 foods for: {user_text}")
 
-            if not user_text:
-                reply = "No input received"
-            else:
-                prompt = f"Suggest 3 foods for: {user_text}"
-                reply = get_gpt_response(prompt)
-
-        print("📤 Sending reply...")
+        print("📤 Reply:", reply)
         await turn_context.send_activity(reply)
-        print("✅ Reply sent")
 
-    except Exception as e:
-        print("❌ BOT LOGIC ERROR:")
+    except Exception:
+        print("\n❌ BOT LOGIC ERROR:")
         traceback.print_exc()
         await turn_context.send_activity("Error in bot logic")
 
 # -----------------------------
-# ROUTES
+# HTTP ROUTE
 # -----------------------------
 async def messages(req: web.Request):
-    print("\n📩 REQUEST RECEIVED")
-
     try:
-        body = await req.json()
-        print("📦 Payload:", body)
+        print("\n📩 Incoming request")
 
+        body = await req.json()
         activity = Activity().deserialize(body)
+
         auth_header = req.headers.get("Authorization", "")
 
-        print("🔐 Auth header:", auth_header)
+        print("🔐 Auth header exists:", bool(auth_header))
 
         await adapter.process_activity(activity, auth_header, bot_logic)
 
-        print("✅ process_activity completed")
-
         return web.Response(status=201)
 
-    except Exception as e:
-        print("❌ REQUEST ERROR:")
+    except Exception:
+        print("\n❌ REQUEST ERROR:")
         traceback.print_exc()
-        return web.Response(text=str(e), status=500)
+        return web.Response(status=500)
 
-async def home(req):
-    return web.Response(text="✅ BOT RUNNING (DEBUG MODE)")
+# -----------------------------
+# HEALTH CHECK
+# -----------------------------
+async def health(req):
+    return web.Response(text="BOT RUNNING")
 
 # -----------------------------
 # APP
 # -----------------------------
 app = web.Application()
 app.router.add_post("/api/messages", messages)
-app.router.add_get("/", home)
+app.router.add_get("/", health)
 
 # -----------------------------
 # RUN
 # -----------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get("WEBSITES_PORT", 8000))
-    print(f"🚀 Starting bot on port {port}")
+    port = int(os.environ.get("PORT", 8000))
+    print(f"🚀 Running on port {port}")
     web.run_app(app, host="0.0.0.0", port=port)
