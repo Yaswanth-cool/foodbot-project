@@ -19,9 +19,20 @@ load_dotenv()
 # -----------------------------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# ⚠️ KEEP EMPTY ONLY FOR LOCAL DEBUG
 APP_ID = os.getenv("MicrosoftAppId", "")
 APP_PASSWORD = os.getenv("MicrosoftAppPassword", "")
+
+# -----------------------------
+# 🔍 STARTUP DEBUG CHECK (IMPORTANT)
+# -----------------------------
+print("==== BOT ENV CHECK ====")
+print("MicrosoftAppId:", APP_ID if APP_ID else "❌ MISSING")
+print("MicrosoftAppPassword exists:", bool(APP_PASSWORD))
+print("PORT:", os.getenv("PORT"))
+
+# Fail fast if misconfigured (VERY IMPORTANT for Azure debugging)
+if not APP_ID or not APP_PASSWORD:
+    print("❌ BOT CONFIG ERROR: Missing MicrosoftAppId or MicrosoftAppPassword")
 
 # -----------------------------
 # CLIENT
