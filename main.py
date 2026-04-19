@@ -218,9 +218,9 @@ async def messages(req: web.Request):
         traceback.print_exc()
         return web.Response(status=500)
 
-# -------------------------
+# ----------------------------
 # HEALTH CHECK
-# --------------------------
+# ------------------------------
 async def health(req):
     return web.Response(text="✅ Multimodal Food Bot Running")
 
